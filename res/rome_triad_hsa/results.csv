@@ -1,0 +1,2 @@
+"Index","KernelName","gpu-id","queue-id","queue-index","pid","tid","grd","wgr","lds","scr","vgpr","sgpr","fbar","sig","obj","DispatchNs","BeginNs","EndNs","CompleteNs","DurationNs"
+0,"__omp_offloading_2d_18a8104__Z5triadllll_l41.kd",0,0,0,219242,219242,65536,256,512,0,28,48,768926720,0x7f97a4f66800,0x7f96a0a008c0,2056104597478276,2056104597520137,2056104598320615,2056104598338054,800478
