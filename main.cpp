@@ -144,31 +144,150 @@ int main(int argc, char* argv[]){
     }
   }
   
-  int t = 10; 
+  int t = 64; 
   int numTeams = 1024;
   int numThreads = 512;
-
+  int N = (mlen-sublen)*(mlen-sublen-1)/2;
+  int n = mlen -sublen;
+  printf("n= %d, N= %d",n,N);
   auto t0 = std::chrono::high_resolution_clock::now();
+
+/*
+  //funktionierender schräg runterlaufender loop
+ // TODO loop tilig and parallelization
+ for(int offset=0;offset<n;offset++){
+                  printf("\n");
+//#pragma omp parallel for 
+   for (int row=0;row+offset<n;row++){
+                  int i = row;
+                  int j = row+sublen+offset;
+                  // streaming dot product
+                  if (i!=0)
+                    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
+                  else
+                    printf("(%d,%d) ",i,j);
+
+                  double cr = QT[j-i-sublen] * norm[i] * norm[j];
+
+                  // updating the nearest neighbors information
+                  if (cr > mp[i]){
+                    mp[i]=cr;
+                    mpi[i]=j;
+                  }
+
+                if (cr > mp[j]){
+                    mp[j]=cr;
+                    mpi[j]=i;
+                  }
+          }
+
+  }
+
+
+ */
+//  /*
+/*
+//funktionierende vl version
+else {
   // main computation loops
- 
-
   // TODO loop tiling and parallelization
-  for (int ii=0;ii<mlen-sublen;ii+=2*t){
-  for (int jj=ii+sublen;jj<mlen ;jj+=t){
-  int mi = ii+t > mlen-sublen?mlen-sublen: ii+t;
-  #pragma omp target teams distribute dist_schedule(static, 1) num_teams(numTeams) map (to: dg, df, t, mi, mlen, sublen) map(tofrom: QT, mpi,mp) nowait
-  {
-  for (int i=ii; i<mi; i++){
+  for (int i=0;i<mlen-sublen;i++)
+    for (int tile=0;tile<n;tile+=t){
+          for (int j=i+sublen+tile;j<mlen&&j<tile+t ;j++){
+      // streaming dot product
+                  if (i!=0)
+                    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
+                  double cr = QT[j-i-sublen] * norm[i] * norm[j];
 
-	  
-	  
-  	  int mj = jj+t > mlen?mlen: jj+t;
-  #pragma omp parallel for num_threads(numThreads)
-	  for (int j=jj+i-ii; j<mj; j++){      
-	  // streaming dot product
+      // updating the nearest neighbors information
+                  if (cr > mp[i]){
+                    mp[i]=cr;
+                    mpi[i]=j;
+                  }
+
+                if (cr > mp[j]){
+                    mp[j]=cr;
+                    mpi[j]=i;
+                  }
+          }
+  }
+
+
+
+
+
+ */ 
+ /*
+// schräg runter mit funktionierendem tiling
+  for(int tile=0;tile<n;tile+=t){
+    for(int offset=0;offset<n;offset++){
+      printf("\n");
+        for (int row=tile;row+offset<n&&row<tile+t;row++){
+                  int i = row;
+                  int j = row+sublen+offset;
+                  // streaming dot product
+                  if (i!=0)
+                    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
+                  else
+                    printf("(%d,%d) ",i,j);
+
+                  double cr = QT[j-i-sublen] * norm[i] * norm[j];
+
+                  // updating the nearest neighbors information
+                  if (cr > mp[i]){
+                    mp[i]=cr;
+                    mpi[i]=j;
+                  }
+
+                if (cr > mp[j]){
+                    mp[j]=cr;
+                    mpi[j]=i;
+                  }
+          }
+
+ }}
+
+*/
+ // parallel schräg runterlaufender loop
+ // TODO loop tilig and parallelization
+t=64;
+int loop = 0;
+if(loop ==0){
+  for(int tile=0;tile<n;tile+=t){
+#pragma omp parallel for schedule(static)
+    for(int offset=0;offset<n;offset++){
+        for (int row=tile;row+offset<n&&row<tile+t;row++){
+      		  int i = row;
+		  int j = row+sublen+offset;
+		  // streaming dot product
 		  if (i!=0)
 		    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
+		  double cr = QT[j-i-sublen] * norm[i] * norm[j];
 
+		  // updating the nearest neighbors information
+		  if (cr > mp[i]){
+		    mp[i]=cr;
+		    mpi[i]=j;
+		  }
+
+	  	if (cr > mp[j]){
+		    mp[j]=cr;
+		    mpi[j]=i;
+		  }
+	  }
+
+ }}
+}
+else if( loop == 1){
+  // main computation loops
+  // TODO loop tiling and parallelization
+  for (int i=0;i<mlen-sublen;i++)
+// #pragma omp distribute parallel for schedule(static) 
+    for (int tile=0;tile<n;tile+=t){
+	  for (int j=i+sublen+tile;j<mlen&&j<tile+t ;j++){
+      // streaming dot product
+		  if (i!=0)
+		    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
 		  double cr = QT[j-i-sublen] * norm[i] * norm[j];
 
       // updating the nearest neighbors information
@@ -182,88 +301,20 @@ int main(int argc, char* argv[]){
 		    mpi[j]=i;
 		  }
 	  }
-
   }
-  }}
-  }
-  omp_set_default_device(1);
-  // TODO loop tiling and parallelization
-  
-  for (int ii=t;ii<mlen-sublen;ii+=2*t){
-  for (int jj=ii+sublen;jj<mlen ;jj+=t){
-  
-  int mi = ii+t > mlen-sublen?mlen-sublen: ii+t;
-  #pragma omp target teams distribute dist_schedule(static, 1) num_teams(numTeams) map (to: dg, df, t, mi, mlen, sublen) map(tofrom: QT, mpi,mp) nowait
-  {
-  for (int i=ii; i<mi; i++){
-
-	  
-	  
-  	  int mj = jj+t > mlen?mlen: jj+t;
-  #pragma omp parallel for num_threads(numThreads)
-	  for (int j=jj+i-ii; j<mj; j++){      
-	  // streaming dot product
-		  if (i!=0)
-		    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
-
-		  double cr = QT[j-i-sublen] * norm[i] * norm[j];
-
-      // updating the nearest neighbors information
-		  if (cr > mp[i]){
-		    mp[i]=cr;
-		    mpi[i]=j;
-		  }
-
-	  	if (cr > mp[j]){
-		    mp[j]=cr;
-		    mpi[j]=i;
-		  }
-	  }
-  } 
-  }}
-  }
-/* 
 
 
 
-  // TODO loop tiling and parallelization
-  for (int ii=t;ii<mlen-sublen;ii+=2*t){
-  int mi = ii+t > mlen-sublen?mlen-sublen: ii+t;
-  for (int i=ii; i<mi; i++){
-//  for (int i=0;i<mlen-sublen;i++){
+}
 
-   // TODO loop tiling and simd parallelization
-	  
-	  
-	  for (int jj=i+sublen;jj<mlen ;jj+=t){
-  	  int mj = jj+t > mlen?mlen: jj+t;
-	  for (int j=jj; j<mj; j++){      
-//	for (int j=i+sublen;j<mlen ;j++){  
-	  // streaming dot product
-		  if (i!=0)
-		    QT[j-i-sublen] +=  df[i]*dg[j] + df[j]*dg[i];
-
-		  double cr = QT[j-i-sublen] * norm[i] * norm[j];
-
-      // updating the nearest neighbors information
-		  if (cr > mp[i]){
-		    mp[i]=cr;
-		    mpi[i]=j;
-		  }
-
-	  	if (cr > mp[j]){
-		    mp[j]=cr;
-		    mpi[j]=i;
-		  }
-	  }
-//  }
-  }}}
-  */
   auto t1 = std::chrono::high_resolution_clock::now();
   using dsec = std::chrono::duration<double>;
   double dur = std::chrono::duration_cast<dsec>(t1-t0).count();
-  //double mflop = 2.0*(double)N*(double)N*(double)N*(double)REP*1.0e-6;
-  //double mflops = mflop/dur;
+ // flop = i*j/2 * ( 3 +2) 
+  double flop = ((mlen -sublen) * (mlen - sublen))/2 *5;
+  double flops = flop/dur;
+  flops = flops/1000000;
+  printf("performance for length %d : %f MFLOPS \n", len, flops);
 
 
 
